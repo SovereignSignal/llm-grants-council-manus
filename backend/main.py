@@ -1,5 +1,12 @@
 """FastAPI backend for the Grants Council."""
 
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env from project root (parent of backend/)
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(env_path)
+
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -480,6 +487,197 @@ async def get_conversation(conversation_id: str):
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return conversation
+
+
+class MessageRequest(BaseModel):
+    """Request to send a message in a conversation."""
+    content: str
+
+
+@app.post("/api/conversations/{conversation_id}/message/stream")
+async def send_message_stream(conversation_id: str, request: MessageRequest):
+    """
+    Send a message and receive streaming evaluation updates.
+
+    The message can be:
+    - A URL to a grant application (will be fetched and parsed)
+    - Plain text describing a grant application
+    """
+    import httpx
+    import re
+
+    conversation = storage.get_conversation(conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    content = request.content.strip()
+
+    async def event_generator():
+        try:
+            # Save user message
+            storage.add_message_to_conversation(conversation_id, "user", content)
+            yield f"data: {json.dumps({'type': 'message_received', 'content': content})}\n\n"
+
+            # Check if content is a URL
+            url_pattern = r'https?://[^\s]+'
+            urls = re.findall(url_pattern, content)
+
+            application_text = content
+
+            if urls:
+                # Fetch content from URL
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching application from URL...'})}\n\n"
+
+                try:
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        response = await client.get(urls[0], follow_redirects=True)
+                        response.raise_for_status()
+
+                        # Extract text content (basic HTML stripping)
+                        html_content = response.text
+                        # Simple HTML tag removal
+                        import re as re_module
+                        text_content = re_module.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re_module.DOTALL)
+                        text_content = re_module.sub(r'<style[^>]*>.*?</style>', '', text_content, flags=re_module.DOTALL)
+                        text_content = re_module.sub(r'<[^>]+>', ' ', text_content)
+                        text_content = re_module.sub(r'\s+', ' ', text_content).strip()
+
+                        application_text = text_content[:15000]  # Limit size
+
+                        yield f"data: {json.dumps({'type': 'status', 'message': 'Application content fetched successfully'})}\n\n"
+
+                except Exception as e:
+                    yield f"data: {json.dumps({'type': 'error', 'message': f'Failed to fetch URL: {str(e)}'})}\n\n"
+                    return
+
+            # Parse as application
+            yield f"data: {json.dumps({'type': 'stage', 'stage': 'parsing', 'status': 'started'})}\n\n"
+
+            try:
+                application = await parse_freeform_application(
+                    application_text,
+                    metadata={"source_url": urls[0] if urls else None}
+                )
+                storage.save_application(application)
+
+                # Update conversation with application
+                conv = storage.get_conversation(conversation_id)
+                conv["application_id"] = application.id
+                conv["title"] = application.title[:50] if application.title else "Grant Evaluation"
+                storage.save_conversation(conv)
+
+                yield f"data: {json.dumps({'type': 'stage', 'stage': 'parsing', 'status': 'complete', 'application': {'id': application.id, 'title': application.title, 'team': application.team_name, 'funding': application.funding_requested}})}\n\n"
+
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'message': f'Failed to parse application: {str(e)}'})}\n\n"
+                return
+
+            # Run council evaluation
+            from .agents import evaluate_application as eval_app, get_team_context
+            from .council import (
+                run_deliberation_round, aggregate_evaluations,
+                determine_routing, synthesize_decision
+            )
+            from .config import MAX_DELIBERATION_ROUNDS
+
+            # Update status
+            application.status = ApplicationStatus.EVALUATING
+            storage.save_application(application)
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Starting council evaluation...'})}\n\n"
+
+            # Get team context
+            team_context = await get_team_context(application)
+
+            # Stage 1: Initial evaluation
+            yield f"data: {json.dumps({'type': 'stage', 'stage': 'initial_evaluation', 'status': 'started'})}\n\n"
+            evaluations = await eval_app(application, team_context=team_context)
+
+            eval_summary = [
+                {"agent": e.agent_name, "score": e.score, "recommendation": e.recommendation.value}
+                for e in evaluations
+            ]
+            yield f"data: {json.dumps({'type': 'stage', 'stage': 'initial_evaluation', 'status': 'complete', 'evaluations': eval_summary})}\n\n"
+
+            # Stage 2: Deliberation
+            application.status = ApplicationStatus.DELIBERATING
+            storage.save_application(application)
+
+            for round_num in range(1, MAX_DELIBERATION_ROUNDS + 1):
+                yield f"data: {json.dumps({'type': 'stage', 'stage': f'deliberation_round_{round_num}', 'status': 'started'})}\n\n"
+
+                evaluations = await run_deliberation_round(application, evaluations, round_num)
+
+                revisions = sum(1 for e in evaluations if e.is_revised and e.deliberation_round == round_num)
+                yield f"data: {json.dumps({'type': 'stage', 'stage': f'deliberation_round_{round_num}', 'status': 'complete', 'revisions': revisions})}\n\n"
+
+                if revisions == 0:
+                    break
+
+            # Stage 3: Aggregate and route
+            yield f"data: {json.dumps({'type': 'stage', 'stage': 'aggregation', 'status': 'started'})}\n\n"
+            aggregated = aggregate_evaluations(evaluations)
+            recommendation, auto_execute, review_reasons = determine_routing(application, aggregated)
+            yield f"data: {json.dumps({'type': 'stage', 'stage': 'aggregation', 'status': 'complete', 'recommendation': recommendation.value, 'auto_execute': auto_execute})}\n\n"
+
+            # Stage 4: Synthesis
+            yield f"data: {json.dumps({'type': 'stage', 'stage': 'synthesis', 'status': 'started'})}\n\n"
+            synthesis, feedback = await synthesize_decision(application, evaluations, aggregated, recommendation)
+            yield f"data: {json.dumps({'type': 'stage', 'stage': 'synthesis', 'status': 'complete'})}\n\n"
+
+            # Build and save decision
+            from .models import CouncilDecision
+            decision = CouncilDecision(
+                application_id=application.id,
+                average_score=aggregated["average_score"],
+                average_confidence=aggregated["average_confidence"],
+                recommendation=recommendation,
+                evaluations=evaluations,
+                auto_executed=auto_execute,
+                requires_human_review=not auto_execute,
+                review_reasons=review_reasons,
+                synthesis=synthesis,
+                feedback_for_applicant=feedback,
+            )
+
+            if auto_execute:
+                if recommendation == Recommendation.APPROVE:
+                    application.status = ApplicationStatus.AUTO_APPROVED
+                else:
+                    application.status = ApplicationStatus.AUTO_REJECTED
+                decision.decided_at = datetime.utcnow()
+            else:
+                application.status = ApplicationStatus.NEEDS_REVIEW
+
+            storage.save_application(application)
+            storage.save_decision(decision)
+
+            # Save assistant message with full results
+            result_message = {
+                "decision_id": decision.id,
+                "recommendation": recommendation.value,
+                "average_score": aggregated["average_score"],
+                "synthesis": synthesis,
+                "feedback": feedback,
+                "evaluations": [e.to_dict() for e in evaluations],
+            }
+            storage.add_message_to_conversation(conversation_id, "assistant", result_message)
+
+            # Final result
+            yield f"data: {json.dumps({'type': 'complete', 'decision_id': decision.id, 'recommendation': recommendation.value, 'average_score': aggregated['average_score'], 'synthesis': synthesis, 'feedback': feedback})}\n\n"
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
 
 
 # ============ Webhook Endpoint ============

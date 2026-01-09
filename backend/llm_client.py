@@ -6,8 +6,11 @@ import httpx
 from typing import List, Dict, Any, Optional
 from openai import AsyncOpenAI
 
-# Initialize client - uses pre-configured base URL and API key
-client = AsyncOpenAI()
+# Initialize client for OpenRouter
+client = AsyncOpenAI(
+    api_key=os.getenv("OPENROUTER_API_KEY"),
+    base_url="https://openrouter.ai/api/v1"
+)
 
 
 async def query_model(

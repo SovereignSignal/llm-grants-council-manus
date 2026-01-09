@@ -2,8 +2,8 @@
 
 import os
 
-# OpenAI API key (uses OpenAI-compatible endpoint)
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# OpenRouter API key
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/grants_council.db")

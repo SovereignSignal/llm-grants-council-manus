@@ -6,9 +6,9 @@ echo "Starting Grants Council..."
 echo ""
 
 # Check for API key
-if [ -z "$OPENAI_API_KEY" ]; then
-    echo "Warning: OPENAI_API_KEY not set"
-    echo "Set it with: export OPENAI_API_KEY='your-key'"
+if [ -z "$OPENROUTER_API_KEY" ]; then
+    echo "Warning: OPENROUTER_API_KEY not set"
+    echo "Add it to .env file or set with: export OPENROUTER_API_KEY='your-key'"
     echo ""
 fi
 
@@ -25,7 +25,7 @@ sleep 2
 # Start frontend
 echo "Starting frontend on http://localhost:5173..."
 cd frontend
-pnpm dev &
+npm run dev &
 FRONTEND_PID=$!
 
 echo ""

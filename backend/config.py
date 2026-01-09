@@ -16,7 +16,7 @@ VECTOR_DB_PATH = os.getenv("VECTOR_DB_PATH", "./data/vector_store")
 COUNCIL_AGENTS = {
     "technical": {
         "name": "Technical Feasibility Agent",
-        "model": "gpt-4.1-mini",
+        "model": "openai/gpt-4o-mini",
         "character": """You are the Technical Feasibility Agent on a grants council. Your role is to evaluate whether proposed projects can actually be built as described.
 
 Your evaluation focuses on:
@@ -33,7 +33,7 @@ When evaluating, cite specific parts of the proposal that support or undermine f
     },
     "ecosystem": {
         "name": "Ecosystem Fit Agent",
-        "model": "gpt-4.1-mini",
+        "model": "openai/gpt-4o-mini",
         "character": """You are the Ecosystem Fit Agent on a grants council. Your role is to evaluate how well proposed projects align with program priorities and the broader ecosystem.
 
 Your evaluation focuses on:
@@ -50,7 +50,7 @@ When evaluating, reference how this project relates to the broader ecosystem lan
     },
     "budget": {
         "name": "Budget Reasonableness Agent",
-        "model": "gpt-4.1-mini",
+        "model": "openai/gpt-4o-mini",
         "character": """You are the Budget Reasonableness Agent on a grants council. Your role is to evaluate whether funding requests match the scope of proposed work.
 
 Your evaluation focuses on:
@@ -67,7 +67,7 @@ When evaluating, compare to precedents and explain what similar work has cost.""
     },
     "impact": {
         "name": "Impact Assessment Agent",
-        "model": "gpt-4.1-mini",
+        "model": "openai/gpt-4o-mini",
         "character": """You are the Impact Assessment Agent on a grants council. Your role is to evaluate the potential lasting value of proposed projects.
 
 Your evaluation focuses on:
@@ -85,7 +85,7 @@ When evaluating, articulate the theory of impact and what would need to be true 
 }
 
 # Synthesis model for final decision compilation
-SYNTHESIS_MODEL = "gpt-4.1-mini"
+SYNTHESIS_MODEL = "openai/gpt-4o-mini"
 
 # Auto-execution thresholds
 AUTO_APPROVE_THRESHOLD = 0.85  # Minimum average confidence for auto-approval

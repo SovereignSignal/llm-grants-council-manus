@@ -161,3 +161,202 @@
   background: #ccc;
   border-color: #ccc;
 }
+
+/* Status and Error Messages */
+.status-message {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin: 8px 0;
+  background: #f0f7ff;
+  border-radius: 8px;
+  border: 1px solid #d0e7ff;
+  color: #4a90e2;
+  font-size: 14px;
+}
+
+.error-message {
+  padding: 12px 16px;
+  margin: 8px 0;
+  background: #fef2f2;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  font-size: 14px;
+}
+
+/* Application Card */
+.application-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin: 12px 0;
+}
+
+.application-card h3 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  color: #111827;
+}
+
+.application-meta {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.meta-item {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.meta-item strong {
+  color: #374151;
+}
+
+/* Evaluations Section */
+.evaluations-section {
+  margin: 16px 0;
+}
+
+.evaluations-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.evaluations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+/* Evaluation Card */
+.evaluation-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.evaluation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.agent-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.evaluation-metrics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.score {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.recommendation-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.recommendation-badge.large {
+  font-size: 13px;
+  padding: 6px 12px;
+}
+
+/* Decision Card */
+.decision-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin: 16px 0;
+}
+
+.decision-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.decision-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #111827;
+}
+
+.decision-metrics {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.average-score {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.decision-section {
+  margin-top: 16px;
+}
+
+.decision-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.decision-section .markdown-content {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #4b5563;
+}
+
+.decision-section .markdown-content p {
+  margin: 0 0 12px 0;
+}
+
+.decision-section .markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+/* Markdown Content */
+.markdown-content {
+  line-height: 1.6;
+}
+
+.markdown-content p {
+  margin: 0 0 8px 0;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}

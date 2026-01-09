@@ -44,7 +44,7 @@ function App() {
     try {
       const newConv = await api.createConversation();
       setConversations([
-        { id: newConv.id, created_at: newConv.created_at, message_count: 0 },
+        { id: newConv.id, created_at: newConv.created_at, title: newConv.title, message_count: 0 },
         ...conversations,
       ]);
       setCurrentConversationId(newConv.id);
@@ -72,15 +72,20 @@ function App() {
       // Create a partial assistant message that will be updated progressively
       const assistantMessage = {
         role: 'assistant',
-        stage1: null,
-        stage2: null,
-        stage3: null,
-        metadata: null,
+        status: null,
+        application: null,
+        evaluations: null,
+        deliberation: [],
+        recommendation: null,
+        synthesis: null,
+        feedback: null,
         loading: {
-          stage1: false,
-          stage2: false,
-          stage3: false,
+          parsing: false,
+          evaluation: false,
+          deliberation: false,
+          synthesis: false,
         },
+        error: null,
       };
 
       // Add the partial assistant message
@@ -92,82 +97,65 @@ function App() {
       // Send message with streaming
       await api.sendMessageStream(currentConversationId, content, (eventType, event) => {
         switch (eventType) {
-          case 'stage1_start':
+          case 'message_received':
+            // Message received by server
+            break;
+
+          case 'status':
             setCurrentConversation((prev) => {
               const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.loading.stage1 = true;
+              const lastMsg = { ...messages[messages.length - 1] };
+              lastMsg.status = event.message;
+              messages[messages.length - 1] = lastMsg;
               return { ...prev, messages };
             });
             break;
 
-          case 'stage1_complete':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.stage1 = event.data;
-              lastMsg.loading.stage1 = false;
-              return { ...prev, messages };
-            });
-            break;
-
-          case 'stage2_start':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.loading.stage2 = true;
-              return { ...prev, messages };
-            });
-            break;
-
-          case 'stage2_complete':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.stage2 = event.data;
-              lastMsg.metadata = event.metadata;
-              lastMsg.loading.stage2 = false;
-              return { ...prev, messages };
-            });
-            break;
-
-          case 'stage3_start':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.loading.stage3 = true;
-              return { ...prev, messages };
-            });
-            break;
-
-          case 'stage3_complete':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.stage3 = event.data;
-              lastMsg.loading.stage3 = false;
-              return { ...prev, messages };
-            });
-            break;
-
-          case 'title_complete':
-            // Reload conversations to get updated title
-            loadConversations();
+          case 'stage':
+            handleStageEvent(event);
             break;
 
           case 'complete':
-            // Stream complete, reload conversations list
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = { ...messages[messages.length - 1] };
+              lastMsg.recommendation = event.recommendation;
+              lastMsg.synthesis = event.synthesis;
+              lastMsg.feedback = event.feedback;
+              lastMsg.averageScore = event.average_score;
+              lastMsg.decisionId = event.decision_id;
+              lastMsg.loading = {
+                parsing: false,
+                evaluation: false,
+                deliberation: false,
+                synthesis: false,
+              };
+              messages[messages.length - 1] = lastMsg;
+              return { ...prev, messages };
+            });
             loadConversations();
             setIsLoading(false);
             break;
 
           case 'error':
-            console.error('Stream error:', event.message);
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = { ...messages[messages.length - 1] };
+              lastMsg.error = event.message;
+              lastMsg.loading = {
+                parsing: false,
+                evaluation: false,
+                deliberation: false,
+                synthesis: false,
+              };
+              messages[messages.length - 1] = lastMsg;
+              return { ...prev, messages };
+            });
             setIsLoading(false);
             break;
 
           default:
-            console.log('Unknown event type:', eventType);
+            console.log('Unknown event type:', eventType, event);
         }
       });
     } catch (error) {
@@ -179,6 +167,64 @@ function App() {
       }));
       setIsLoading(false);
     }
+  };
+
+  const handleStageEvent = (event) => {
+    const { stage, status } = event;
+
+    setCurrentConversation((prev) => {
+      const messages = [...prev.messages];
+      const lastMsg = { ...messages[messages.length - 1] };
+
+      if (stage === 'parsing') {
+        if (status === 'started') {
+          lastMsg.loading = { ...lastMsg.loading, parsing: true };
+          lastMsg.status = 'Parsing application...';
+        } else if (status === 'complete') {
+          lastMsg.loading = { ...lastMsg.loading, parsing: false };
+          lastMsg.application = event.application;
+          lastMsg.status = null;
+        }
+      } else if (stage === 'initial_evaluation') {
+        if (status === 'started') {
+          lastMsg.loading = { ...lastMsg.loading, evaluation: true };
+          lastMsg.status = 'Council agents evaluating...';
+        } else if (status === 'complete') {
+          lastMsg.loading = { ...lastMsg.loading, evaluation: false };
+          lastMsg.evaluations = event.evaluations;
+          lastMsg.status = null;
+        }
+      } else if (stage.startsWith('deliberation_round_')) {
+        const round = stage.replace('deliberation_round_', '');
+        if (status === 'started') {
+          lastMsg.loading = { ...lastMsg.loading, deliberation: true };
+          lastMsg.status = `Deliberation round ${round}...`;
+        } else if (status === 'complete') {
+          lastMsg.loading = { ...lastMsg.loading, deliberation: false };
+          lastMsg.deliberation = [...(lastMsg.deliberation || []), { round, revisions: event.revisions }];
+          lastMsg.status = null;
+        }
+      } else if (stage === 'aggregation') {
+        if (status === 'started') {
+          lastMsg.status = 'Aggregating votes...';
+        } else if (status === 'complete') {
+          lastMsg.recommendation = event.recommendation;
+          lastMsg.autoExecute = event.auto_execute;
+          lastMsg.status = null;
+        }
+      } else if (stage === 'synthesis') {
+        if (status === 'started') {
+          lastMsg.loading = { ...lastMsg.loading, synthesis: true };
+          lastMsg.status = 'Synthesizing final decision...';
+        } else if (status === 'complete') {
+          lastMsg.loading = { ...lastMsg.loading, synthesis: false };
+          lastMsg.status = null;
+        }
+      }
+
+      messages[messages.length - 1] = lastMsg;
+      return { ...prev, messages };
+    });
   };
 
   return (

@@ -23,6 +23,7 @@ from .storage import (
     save_application, save_decision, update_application_status,
     get_application
 )
+from .learning import generate_observations_from_override
 
 
 async def run_deliberation_round(
@@ -501,9 +502,23 @@ async def record_human_decision(
         save_application(application)
     
     save_decision(decision)
-    
-    # TODO: Trigger learning loop for agents if this was an override
-    
+
+    # Trigger learning loop if this was an override
+    council_recommendation = decision.recommendation.value
+    is_override = (
+        (council_recommendation == "approve" and human_decision == "reject") or
+        (council_recommendation == "reject" and human_decision == "approve") or
+        (council_recommendation == "needs_review" and human_decision in ["approve", "reject"])
+    )
+
+    if is_override:
+        # Generate observations from agents who were wrong
+        # Run async in background - don't block the response
+        import asyncio
+        asyncio.create_task(
+            generate_observations_from_override(decision, human_decision, human_rationale)
+        )
+
     return decision
 
 

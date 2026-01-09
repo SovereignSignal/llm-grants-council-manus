@@ -407,6 +407,56 @@ async def submit_human_decision(decision_id: str, request: HumanDecisionRequest)
         raise HTTPException(status_code=404, detail=str(e))
 
 
+# ============ Outcome Recording ============
+
+class OutcomeRequest(BaseModel):
+    """Request to record the outcome of a funded grant."""
+    outcome: str = Field(..., pattern="^(success|failure)$")
+    notes: str = Field(..., min_length=10)
+
+
+@app.post("/api/applications/{application_id}/outcome")
+async def record_outcome(application_id: str, request: OutcomeRequest):
+    """
+    Record the outcome of a funded grant.
+
+    This triggers the learning loop - agents reflect on whether their
+    predictions were correct and generate observations accordingly.
+
+    Args:
+        application_id: The application ID
+        outcome: "success" or "failure"
+        notes: Details about the outcome (at least 10 characters)
+    """
+    from .learning import generate_observations_from_outcome
+
+    application = storage.get_application(application_id)
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    # Check that application was approved
+    if application.status not in [ApplicationStatus.APPROVED, ApplicationStatus.AUTO_APPROVED]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Can only record outcomes for approved applications. Current status: {application.status.value}"
+        )
+
+    # Generate observations from agents based on outcome
+    observations = await generate_observations_from_outcome(
+        application_id,
+        request.outcome,
+        request.notes
+    )
+
+    return {
+        "application_id": application_id,
+        "outcome": request.outcome,
+        "observations_generated": len(observations),
+        "observation_ids": [o.id for o in observations],
+        "message": f"Outcome recorded. {len(observations)} draft observations generated for review."
+    }
+
+
 # ============ Observations (Agent Learning) ============
 
 @app.get("/api/observations")

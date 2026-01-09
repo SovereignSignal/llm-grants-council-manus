@@ -5,6 +5,12 @@
 echo "Starting Grants Council..."
 echo ""
 
+# Load .env file if it exists
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
+    echo "✓ Loaded environment from .env"
+fi
+
 # Check for API key
 if [ -z "$OPENROUTER_API_KEY" ]; then
     echo "Warning: OPENROUTER_API_KEY not set"
@@ -12,21 +18,19 @@ if [ -z "$OPENROUTER_API_KEY" ]; then
     echo ""
 fi
 
-# Start backend
+# Start backend (run from project root for relative imports to work)
 echo "Starting backend on http://localhost:8001..."
-cd backend
-uvicorn main:app --reload --port 8001 &
+python3 -m uvicorn backend.main:app --reload --port 8001 &
 BACKEND_PID=$!
-cd ..
 
 # Wait a bit for backend to start
 sleep 2
 
 # Start frontend
 echo "Starting frontend on http://localhost:5173..."
-cd frontend
-npm run dev &
+cd frontend && npm run dev &
 FRONTEND_PID=$!
+cd ..
 
 echo ""
 echo "✓ Grants Council is running!"

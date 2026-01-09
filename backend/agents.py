@@ -12,7 +12,7 @@ from .models import (
 from .llm_client import query_with_structured_output, query_models_parallel
 from .storage import (
     get_observations_for_agent, get_team, find_team_by_name,
-    find_team_by_wallet
+    find_team_by_wallet, save_observation
 )
 from .parser import format_application_for_evaluation
 
@@ -215,7 +215,12 @@ async def evaluate_application(
             status=ObservationStatus.ACTIVE,
             limit=5
         )
-        
+
+        # Track observation usage
+        for obs in observations:
+            obs.times_used = (obs.times_used or 0) + 1
+            save_observation(obs)
+
         prompt = build_agent_prompt(
             agent_id,
             application,

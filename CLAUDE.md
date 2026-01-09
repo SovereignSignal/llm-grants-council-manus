@@ -1,146 +1,188 @@
 # Grants Council - Technical Documentation
 
-This document provides technical details for developers working on the Grants Council codebase.
+This document provides technical guidance for AI assistants and developers working on the Grants Council codebase.
+
+## Project Overview
+
+Grants Council is an agentic multi-LLM system for evaluating grant applications. Four specialized AI agents evaluate each application in parallel, deliberate on their findings, and produce recommendations that can be auto-executed or routed to human reviewers.
 
 ## Project Structure
 
 ```
-grants-council/
+llm-grants-council-manus/
 ├── backend/
 │   ├── __init__.py          # Package initialization
-│   ├── config.py            # Configuration and agent definitions
+│   ├── config.py            # Configuration, agent definitions, thresholds
 │   ├── models.py            # Data models (Application, Decision, etc.)
-│   ├── llm_client.py        # OpenAI-compatible API client
-│   ├── storage.py           # JSON-based persistence layer
+│   ├── llm_client.py        # OpenRouter API client (OpenAI-compatible)
+│   ├── storage.py           # JSON-based file persistence
 │   ├── parser.py            # Application parsing (freeform & structured)
-│   ├── agents.py            # Agent evaluation logic
-│   ├── council.py           # Deliberation and voting orchestration
-│   ├── learning.py          # Observation generation and learning loop
-│   └── main.py              # FastAPI application and endpoints
-├── frontend/                 # React frontend (from original llm-council)
-├── data/                     # Runtime data storage
-│   ├── applications/         # Application JSON files
-│   ├── evaluations/          # Decision JSON files
-│   ├── observations/         # Agent observation files
-│   ├── teams/                # Team profile files
-│   └── conversations/        # UI conversation history
+│   ├── agents.py            # Agent evaluation logic and prompt building
+│   ├── council.py           # Deliberation, voting, and decision orchestration
+│   ├── learning.py          # Observation generation from outcomes/overrides
+│   └── main.py              # FastAPI application and all API endpoints
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx          # Main application component with state management
+│   │   ├── api.js           # API client for backend communication
+│   │   └── components/
+│   │       ├── Sidebar.jsx      # Conversation list sidebar
+│   │       ├── ChatInterface.jsx # Main evaluation chat UI
+│   │       ├── Stage1.jsx       # Parsing stage display
+│   │       ├── Stage2.jsx       # Agent evaluation display
+│   │       └── Stage3.jsx       # Decision/synthesis display
+│   ├── package.json         # React 19, Vite 7, react-markdown
+│   └── vite.config.js       # Vite configuration
+├── data/                    # Runtime data storage (created automatically)
+│   ├── applications/        # Application JSON files
+│   ├── evaluations/         # Decision JSON files
+│   ├── observations/        # Agent observation files
+│   ├── teams/               # Team profile files
+│   └── conversations/       # UI conversation history
+├── .env.example             # Environment variable template
+├── requirements.txt         # Python dependencies
+├── start.sh                 # Development startup script
 ├── test_backend.py          # Backend test suite
 └── README.md                # User-facing documentation
 ```
+
+## Quick Start
+
+### Prerequisites
+- Python 3.11+
+- Node.js 18+ (for frontend)
+- OpenRouter API key (https://openrouter.ai/keys)
+
+### Setup
+
+```bash
+# 1. Install Python dependencies
+pip install -r requirements.txt
+
+# 2. Set up environment
+cp .env.example .env
+# Edit .env and add your OPENROUTER_API_KEY
+
+# 3. Install frontend dependencies
+cd frontend && npm install && cd ..
+
+# 4. Start both servers
+./start.sh
+```
+
+### Manual Startup
+
+```bash
+# Backend (from project root)
+python3 -m uvicorn backend.main:app --reload --port 8001
+
+# Frontend (in separate terminal)
+cd frontend && npm run dev
+```
+
+### Access Points
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:8001
+- **API Docs**: http://localhost:8001/docs (Swagger UI)
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENROUTER_API_KEY` | Yes | OpenRouter API key for LLM access |
+| `DATABASE_URL` | No | Database connection (default: SQLite) |
+| `VECTOR_DB_PATH` | No | Path for vector store (future use) |
 
 ## Core Components
 
 ### 1. Configuration (`config.py`)
 
-Defines the four council agents with their character prompts:
+Defines the four council agents:
 
-- **Technical Feasibility Agent**: Evaluates whether projects can be built
-- **Ecosystem Fit Agent**: Assesses alignment with program goals
-- **Budget Reasonableness Agent**: Analyzes cost justification
-- **Impact Assessment Agent**: Evaluates potential lasting value
+| Agent ID | Name | Focus |
+|----------|------|-------|
+| `technical` | Technical Feasibility Agent | Can this be built? Timeline realistic? |
+| `ecosystem` | Ecosystem Fit Agent | Aligns with program goals? Fills a gap? |
+| `budget` | Budget Reasonableness Agent | Cost justified? Comparable to similar projects? |
+| `impact` | Impact Assessment Agent | Lasting value? Measurable outcomes? |
 
 Key thresholds:
-- `AUTO_APPROVE_THRESHOLD = 0.85`: Score needed for auto-approval
-- `AUTO_REJECT_THRESHOLD = 0.15`: Score below which auto-reject
-- `BUDGET_REVIEW_THRESHOLD = 50000`: USD amount requiring human review
-- `MAX_DELIBERATION_ROUNDS = 2`: Maximum deliberation iterations
+```python
+AUTO_APPROVE_THRESHOLD = 0.85   # Score needed for auto-approval
+AUTO_REJECT_THRESHOLD = 0.15   # Score below which auto-reject
+BUDGET_REVIEW_THRESHOLD = 50000 # USD amount requiring human review
+MAX_DELIBERATION_ROUNDS = 2    # Maximum deliberation iterations
+POSITION_CHANGE_THRESHOLD = 0.15 # Minimum score change for revision
+```
+
+All agents use `openai/gpt-4o-mini` via OpenRouter by default.
 
 ### 2. Data Models (`models.py`)
 
-Core dataclasses:
+Core dataclasses with `to_dict()` serialization:
 
-```python
-@dataclass
-class Application:
-    id: str
-    title: str
-    team_name: str
-    funding_requested: float
-    status: ApplicationStatus
-    # ... full application fields
+- **Application**: Grant application with team info, milestones, budget
+- **AgentEvaluation**: Single agent's evaluation with score, recommendation, rationale
+- **CouncilDecision**: Aggregated decision with evaluations, synthesis, feedback
+- **Observation**: Learned pattern from an agent
+- **TeamProfile**: Applicant team with history across applications
 
-@dataclass
-class AgentEvaluation:
-    agent_id: str
-    score: float  # 0-1
-    recommendation: Recommendation  # approve/reject/needs_review
-    confidence: float  # 0-1
-    rationale: str
-    strengths: List[str]
-    concerns: List[str]
-    # ... deliberation tracking
-
-@dataclass
-class CouncilDecision:
-    application_id: str
-    average_score: float
-    recommendation: Recommendation
-    evaluations: List[AgentEvaluation]
-    auto_executed: bool
-    requires_human_review: bool
-    synthesis: str
-    feedback_for_applicant: str
-
-@dataclass
-class Observation:
-    agent_id: str
-    pattern: str  # The learned insight
-    evidence: List[str]  # Application IDs supporting this
-    tags: List[str]  # For retrieval
-    status: ObservationStatus  # draft/reviewed/active/deprecated
-```
+Key enums:
+- `ApplicationStatus`: pending, evaluating, deliberating, auto_approved, auto_rejected, needs_review, approved, rejected
+- `Recommendation`: approve, reject, needs_review
+- `ObservationStatus`: draft, reviewed, active, deprecated
 
 ### 3. LLM Client (`llm_client.py`)
 
-Async client for OpenAI-compatible APIs:
+Async client using OpenAI SDK with OpenRouter base URL:
 
 ```python
-async def query_model(model: str, messages: List[Dict], ...) -> Dict
-async def query_models_parallel(models_with_messages: List[Dict], ...) -> Dict
-async def query_with_structured_output(model: str, messages: List[Dict], schema: Dict, ...) -> Dict
-```
+# Single model query
+await query_model(model, messages, temperature=0.7, json_mode=False)
 
-Uses `OPENAI_API_KEY` environment variable. Compatible with any OpenAI-compatible endpoint.
+# Parallel queries to multiple agents
+await query_models_parallel(models_with_messages, temperature=0.7, json_mode=True)
+
+# Query with JSON schema enforcement
+await query_with_structured_output(model, messages, output_schema, temperature=0.7)
+```
 
 ### 4. Storage (`storage.py`)
 
-JSON file-based persistence:
+JSON file-based persistence in `data/` directory:
 
 ```python
 # Applications
-save_application(application: Application) -> str
-get_application(application_id: str) -> Optional[Application]
-list_applications(status: Optional[ApplicationStatus] = None) -> List[Application]
+save_application(application) -> str
+get_application(application_id) -> Optional[Application]
+list_applications(status=None, program_id=None, limit=100)
 
 # Decisions
-save_decision(decision: CouncilDecision) -> str
-get_decision(decision_id: str) -> Optional[CouncilDecision]
-list_decisions(requires_review: Optional[bool] = None) -> List[CouncilDecision]
+save_decision(decision) -> str
+get_decision(decision_id) -> Optional[CouncilDecision]
+get_decision_for_application(application_id) -> Optional[CouncilDecision]
+list_decisions(requires_review=None, limit=100)
 
 # Observations
-save_observation(observation: Observation) -> str
-get_observations_for_agent(agent_id: str, tags: List[str] = None) -> List[Observation]
+save_observation(observation) -> str
+get_observation(observation_id) -> Optional[Observation]
+get_observations_for_agent(agent_id, tags=None, status=ACTIVE, limit=10)
+list_all_observations(agent_id=None, status=None)
 
 # Teams
-save_team(team: TeamProfile) -> str
-get_team(team_id: str) -> Optional[TeamProfile]
-find_team_by_name(name: str) -> Optional[TeamProfile]
-find_team_by_wallet(wallet: str) -> Optional[TeamProfile]
+save_team(team) -> str
+get_team(team_id) -> Optional[TeamProfile]
+find_team_by_name(name) -> Optional[TeamProfile]
+find_team_by_wallet(wallet_address) -> Optional[TeamProfile]
+
+# Conversations (UI state)
+create_conversation(conversation_id) -> Dict
+get_conversation(conversation_id) -> Optional[Dict]
+list_conversations() -> List[Dict]
+add_message_to_conversation(conversation_id, role, content)
 ```
 
-### 5. Parser (`parser.py`)
-
-Handles application ingestion:
-
-```python
-async def parse_freeform_application(text: str, metadata: Dict = None) -> Application
-def parse_structured_application(data: Dict) -> Application
-def format_application_for_evaluation(application: Application) -> str
-```
-
-Freeform parsing uses LLM to extract structured fields from natural language.
-
-### 6. Agents (`agents.py`)
+### 5. Agents (`agents.py`)
 
 Agent evaluation logic:
 
@@ -151,172 +193,156 @@ async def evaluate_application(
     similar_applications: Optional[List[Dict]] = None
 ) -> List[AgentEvaluation]
 
-def build_agent_prompt(
-    agent_id: str,
-    application: Application,
-    observations: List[Observation],
-    team_context: Optional[Dict] = None,
-    similar_applications: Optional[List[Dict]] = None
-) -> str
+def build_agent_prompt(agent_id, application, observations, team_context, similar_applications) -> str
 
-def format_evaluations_for_deliberation(
-    evaluations: List[AgentEvaluation],
-    anonymize: bool = True
-) -> str
+def format_evaluations_for_deliberation(evaluations, anonymize=True) -> str
+
+async def get_team_context(application) -> Optional[Dict]
 ```
 
-### 7. Council (`council.py`)
+Agents receive:
+- Their character prompt from config
+- Up to 5 relevant observations (active status, matching tags)
+- Team history if available
+- The formatted application
 
-Orchestrates the full evaluation pipeline:
+### 6. Council (`council.py`)
+
+Orchestrates the evaluation pipeline:
 
 ```python
-async def run_full_council(
-    application: Application,
-    max_deliberation_rounds: int = MAX_DELIBERATION_ROUNDS
-) -> CouncilDecision
+async def run_full_council(application, max_deliberation_rounds=2) -> CouncilDecision
 
-async def run_deliberation_round(
-    application: Application,
-    evaluations: List[AgentEvaluation],
-    round_number: int
-) -> List[AgentEvaluation]
+async def run_deliberation_round(application, evaluations, round_number) -> List[AgentEvaluation]
 
-def aggregate_evaluations(evaluations: List[AgentEvaluation]) -> Dict[str, Any]
+def aggregate_evaluations(evaluations) -> Dict[str, Any]
 
-def determine_routing(
-    application: Application,
-    aggregated: Dict[str, Any]
-) -> Tuple[Recommendation, bool, List[str]]
+def determine_routing(application, aggregated) -> Tuple[Recommendation, bool, List[str]]
 
-async def synthesize_decision(
-    application: Application,
-    evaluations: List[AgentEvaluation],
-    aggregated: Dict[str, Any],
-    recommendation: Recommendation
-) -> Tuple[str, str]  # (synthesis, feedback)
+async def synthesize_decision(application, evaluations, aggregated, recommendation) -> Tuple[str, str]
+
+async def record_human_decision(decision_id, human_decision, human_rationale, reviewer) -> CouncilDecision
 ```
 
-### 8. Learning (`learning.py`)
+### 7. Learning (`learning.py`)
 
-Generates observations from outcomes:
+Generates observations for agent improvement:
 
 ```python
-async def generate_observations_from_override(
-    decision: CouncilDecision,
-    human_decision: str,
-    human_rationale: str
-) -> List[Observation]
+# When human overrides council decision
+async def generate_observations_from_override(decision, human_decision, human_rationale) -> List[Observation]
 
-async def generate_observations_from_outcome(
-    application_id: str,
-    outcome: str,  # "success" or "failure"
-    outcome_notes: str
-) -> List[Observation]
+# When funded grant succeeds or fails
+async def generate_observations_from_outcome(application_id, outcome, outcome_notes) -> List[Observation]
 
-async def bootstrap_agent_observations(
-    agent_id: str,
-    historical_applications: List[Dict[str, Any]],
-    target_observations: int = 30
-) -> List[Observation]
+# Bootstrap from historical data
+async def bootstrap_agent_observations(agent_id, historical_applications, target_observations=30) -> List[Observation]
+
+# Identify stale observations
+def prune_stale_observations(min_evidence=5, max_age_days=180) -> List[str]
 ```
 
 ## API Endpoints
 
-### Application Management
+### Applications
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/applications` | Submit new application (freeform or structured) |
+| GET | `/api/applications` | List applications (filter: status, program_id) |
+| GET | `/api/applications/{id}` | Get full application details |
+| POST | `/api/applications/{id}/evaluate` | Trigger council evaluation |
+| POST | `/api/applications/{id}/evaluate/stream` | Stream evaluation via SSE |
+| POST | `/api/applications/{id}/outcome` | Record grant outcome (success/failure) |
 
-```
-POST /api/applications
-  - Submit new application (freeform text or structured JSON)
-  - Returns: ApplicationResponse
-
-GET /api/applications
-  - List applications with optional filters
-  - Query params: status, program_id, limit
-  - Returns: List[ApplicationResponse]
-
-GET /api/applications/{application_id}
-  - Get full application details
-  - Returns: Application dict
-
-POST /api/applications/{application_id}/evaluate
-  - Trigger council evaluation
-  - Returns: Decision summary
-
-POST /api/applications/{application_id}/evaluate/stream
-  - Stream evaluation progress via SSE
-  - Returns: Server-Sent Events
-```
-
-### Decision Management
-
-```
-GET /api/decisions
-  - List decisions with optional filters
-  - Query params: requires_review, limit
-  - Returns: List of decision summaries
-
-GET /api/decisions/{decision_id}
-  - Get full decision details
-  - Returns: CouncilDecision dict
-
-POST /api/decisions/{decision_id}/human-decision
-  - Record human approval/rejection
-  - Body: {decision: "approve"|"reject", rationale: str, reviewer: str}
-  - Returns: Updated decision
-```
+### Decisions
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/decisions` | List decisions (filter: requires_review) |
+| GET | `/api/decisions/{id}` | Get full decision details |
+| POST | `/api/decisions/{id}/human-decision` | Record human approval/rejection |
 
 ### Observations
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/observations` | List observations (filter: agent_id, status) |
+| POST | `/api/observations/{id}/activate` | Activate a draft observation |
+| POST | `/api/observations/{id}/helpful` | Mark observation as helpful |
+| POST | `/api/observations/{id}/deprecate` | Deprecate an observation |
+| POST | `/api/observations/prune` | Identify stale observations |
 
-```
-GET /api/observations
-  - List agent observations
-  - Query params: agent_id, status
-  - Returns: List[Observation]
+### Conversations (UI)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/conversations` | List all conversations |
+| POST | `/api/conversations` | Create new conversation |
+| GET | `/api/conversations/{id}` | Get conversation with messages |
+| POST | `/api/conversations/{id}/message/stream` | Send message with streaming evaluation |
 
-POST /api/observations/{observation_id}/activate
-  - Activate a draft observation
-  - Query params: reviewer
-  - Returns: Updated observation
-```
-
-### Webhooks
-
-```
-POST /api/webhook/application
-  - Receive applications from external systems
-  - Accepts various payload formats
-  - Returns: {status, application_id, title}
-```
+### Other
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Health check |
+| GET | `/api/teams/{id}` | Get team profile |
+| POST | `/api/webhook/application` | Receive external applications |
 
 ## Evaluation Flow
 
-1. **Ingestion**: Application submitted via API or webhook
-2. **Context Retrieval**: 
-   - Look up team history
-   - Retrieve relevant agent observations
-   - (Future: Find similar past applications)
-3. **Parallel Evaluation**: All four agents evaluate simultaneously
-4. **Deliberation**: 
+1. **Ingestion**: Application submitted via API, webhook, or UI
+2. **Parsing**: Freeform text parsed to structured format (if needed)
+3. **Context Retrieval**:
+   - Look up team history by name/wallet
+   - Retrieve active observations for each agent
+4. **Parallel Evaluation**: All four agents evaluate simultaneously
+5. **Deliberation**:
    - Agents see anonymized peer evaluations
-   - Can revise scores/recommendations
-   - Continues until positions stabilize or max rounds
-5. **Aggregation**: Compute average score, confidence, variance
-6. **Routing Decision**:
-   - Auto-approve if unanimous, high confidence, under budget threshold
-   - Auto-reject if unanimous rejection
-   - Route to human review otherwise
-7. **Synthesis**: Generate summary and applicant feedback
+   - Can revise scores if change exceeds threshold (0.15)
+   - Continues until positions stabilize or max rounds reached
+6. **Aggregation**: Compute average score, confidence, variance
+7. **Routing Decision**:
+   - Auto-approve: unanimous + high confidence + score >= 0.85 + budget < $50k
+   - Auto-reject: unanimous rejection + high confidence
+   - Human review: anything else
+8. **Synthesis**: Generate summary and applicant feedback
 
-## Extending the System
+## Testing
+
+```bash
+# Run the test suite from project root
+python test_backend.py
+```
+
+Tests cover:
+- Module imports
+- Model creation and serialization
+- Configuration validation
+- Storage operations (creates test data in data/)
+- Parser functionality
+- Council aggregation logic
+- FastAPI route registration
+
+## Frontend Architecture
+
+Built with React 19 + Vite 7:
+
+- **App.jsx**: Main state management, API calls, SSE handling
+- **Sidebar**: Conversation list navigation
+- **ChatInterface**: Message display and input
+- **Stage components**: Progressive disclosure of evaluation stages
+
+Key patterns:
+- Streaming evaluation updates via Server-Sent Events
+- Optimistic UI updates for user messages
+- Progressive rendering of evaluation stages
+
+## Development Patterns
 
 ### Adding a New Agent
 
 1. Add agent definition to `COUNCIL_AGENTS` in `config.py`:
-
 ```python
 COUNCIL_AGENTS["security"] = {
     "name": "Security Assessment Agent",
-    "model": "gpt-4.1-mini",
+    "model": "openai/gpt-4o-mini",
     "character": """Your character prompt here...""",
     "tags": ["security", "audit", "smart-contracts"]
 }
@@ -326,51 +352,31 @@ COUNCIL_AGENTS["security"] = {
 
 ### Customizing Decision Routing
 
-Modify `determine_routing()` in `council.py` to add custom logic:
-
+Modify `determine_routing()` in `council.py`:
 ```python
-# Example: Always require review for certain categories
-if "defi" in application.tags:
+# Example: Always require review for DeFi
+if "defi" in application.description.lower():
     auto_execute = False
     review_reasons.append("DeFi applications require manual review")
 ```
 
-### Integrating External Data
+### Adding New API Endpoints
 
-1. Add retrieval functions to `storage.py`
-2. Call them in `agents.py` when building prompts
-3. Include relevant context in the agent prompt
+1. Define Pydantic request/response models in `main.py`
+2. Add endpoint function with appropriate decorators
+3. Update this documentation
 
-## Testing
+## Common Gotchas
 
-Run the test suite:
-
-```bash
-cd grants-council
-python test_backend.py
-```
-
-Tests cover:
-- Module imports
-- Model creation and serialization
-- Configuration validation
-- Storage operations
-- Parser functionality
-- Council aggregation logic
-- FastAPI route registration
-
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes | API key for LLM access |
-| `DATABASE_URL` | No | Database connection (default: SQLite) |
-| `VECTOR_DB_PATH` | No | Path for vector store (future use) |
+1. **Module Import Errors**: Always run backend as `python -m uvicorn backend.main:app` from project root
+2. **Missing API Key**: Set `OPENROUTER_API_KEY` in `.env` file
+3. **CORS Issues**: Frontend origins are whitelisted in `main.py` (localhost:5173, localhost:3000, *)
+4. **JSON Parsing**: LLM responses may include markdown code blocks - parser handles this
+5. **Data Directory**: Created automatically on first storage operation
 
 ## Key Design Decisions
 
 ### Agent Character Prompts
-
 Each agent has a detailed character prompt that:
 - Defines their evaluation focus and expertise
 - Specifies what they look for (red flags, positive signals)
@@ -378,40 +384,29 @@ Each agent has a detailed character prompt that:
 - Instructs them to cite specific evidence from applications
 
 ### Deliberation Mechanism
-
-The deliberation loop allows agents to:
-- See anonymized peer evaluations (prevents favoritism)
-- Revise their positions based on new arguments
-- Converge toward consensus or surface genuine disagreements
-
-Position changes require a minimum threshold (`POSITION_CHANGE_THRESHOLD`) to count as revisions, preventing noise from minor adjustments.
+- Agents see anonymized peer evaluations (prevents favoritism)
+- Position changes require minimum threshold to count as revisions
+- Stops early if no agents revise their positions
 
 ### Auto-Execution Criteria
-
-Auto-execution requires ALL of:
-- Unanimous recommendation (all agents agree)
-- High average confidence (≥0.8)
-- Score above/below threshold (0.85 approve, 0.15 reject)
+All conditions must be met:
+- Unanimous recommendation
+- High average confidence (>= 0.8)
+- Score above/below threshold
 - Budget under review threshold
 
-Any of these failing triggers human review with specific reasons.
-
 ### Observation Lifecycle
-
-Observations follow a lifecycle:
 1. **Draft**: Generated from outcomes/overrides
-2. **Reviewed**: Human has validated the pattern
+2. **Reviewed**: Human has validated the pattern (not currently enforced)
 3. **Active**: Used in agent prompts
-4. **Deprecated**: No longer used (stale or incorrect)
+4. **Deprecated**: No longer used
 
-This prevents agents from learning incorrect patterns without human oversight.
+## File Conventions
 
-## Common Gotchas
-
-1. **Module Import Errors**: Run backend as `python -m backend.main` from project root
-2. **Missing API Key**: Set `OPENAI_API_KEY` environment variable
-3. **CORS Issues**: Frontend must match allowed origins in `main.py`
-4. **JSON Parsing**: LLM responses may include markdown code blocks - parser handles this
+- Backend code: Python 3.11+, dataclasses, async/await
+- Frontend code: React 19, ES modules, CSS modules
+- Data files: JSON with 2-space indentation
+- No TypeScript in frontend (plain JSX)
 
 ## Future Enhancement Ideas
 

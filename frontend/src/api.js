@@ -112,4 +112,77 @@ export const api = {
       }
     }
   },
+
+  /**
+   * Submit a human decision on a council evaluation.
+   */
+  async submitHumanDecision(decisionId, decision, rationale, reviewer = 'reviewer') {
+    const response = await fetch(
+      `${API_BASE}/api/decisions/${decisionId}/human-decision`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ decision, rationale, reviewer }),
+      }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to submit human decision');
+    }
+    return response.json();
+  },
+
+  /**
+   * List observations (agent learned patterns).
+   */
+  async listObservations(status = null) {
+    const url = status
+      ? `${API_BASE}/api/observations?status=${status}`
+      : `${API_BASE}/api/observations`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error('Failed to list observations');
+    }
+    return response.json();
+  },
+
+  /**
+   * Activate a draft observation.
+   */
+  async activateObservation(observationId, reviewer = 'reviewer') {
+    const response = await fetch(
+      `${API_BASE}/api/observations/${observationId}/activate?reviewer=${reviewer}`,
+      {
+        method: 'POST',
+      }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to activate observation');
+    }
+    return response.json();
+  },
+
+  /**
+   * Record the outcome of an approved application.
+   * @param {string} applicationId - The application ID
+   * @param {string} outcome - "success" or "failure"
+   * @param {string} notes - Explanation of the outcome (min 10 chars)
+   */
+  async recordOutcome(applicationId, outcome, notes) {
+    const response = await fetch(
+      `${API_BASE}/api/applications/${applicationId}/outcome`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ outcome, notes }),
+      }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to record outcome');
+    }
+    return response.json();
+  },
 };

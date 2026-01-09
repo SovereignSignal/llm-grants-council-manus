@@ -267,18 +267,27 @@ async def evaluate_application_stream(application_id: str):
             evaluations = await eval_app(application, team_context=team_context)
             
             eval_summary = [
-                {"agent": e.agent_name, "score": e.score, "recommendation": e.recommendation.value}
+                {
+                    "agent": e.agent_name,
+                    "score": e.score,
+                    "recommendation": e.recommendation.value,
+                    "confidence": e.confidence,
+                    "rationale": e.rationale,
+                    "strengths": e.strengths,
+                    "concerns": e.concerns,
+                    "questions": e.questions
+                }
                 for e in evaluations
             ]
             yield f"data: {json.dumps({'type': 'stage', 'stage': 'initial_evaluation', 'status': 'complete', 'evaluations': eval_summary})}\n\n"
-            
+
             # Stage 2: Deliberation
             application.status = ApplicationStatus.DELIBERATING
             storage.save_application(application)
-            
+
             for round_num in range(1, MAX_DELIBERATION_ROUNDS + 1):
                 yield f"data: {json.dumps({'type': 'stage', 'stage': f'deliberation_round_{round_num}', 'status': 'started'})}\n\n"
-                
+
                 evaluations = await run_deliberation_round(application, evaluations, round_num)
                 
                 revisions = sum(1 for e in evaluations if e.is_revised and e.deliberation_round == round_num)
@@ -493,6 +502,71 @@ async def activate_observation(observation_id: str, reviewer: str):
     return observation.to_dict()
 
 
+@app.post("/api/observations/{observation_id}/helpful")
+async def mark_observation_helpful(observation_id: str):
+    """Mark an observation as helpful (used in a successful evaluation)."""
+    observation = storage.get_observation(observation_id)
+    if not observation:
+        raise HTTPException(status_code=404, detail="Observation not found")
+
+    observation.times_helpful = (observation.times_helpful or 0) + 1
+    storage.save_observation(observation)
+
+    return {
+        "id": observation.id,
+        "times_used": observation.times_used,
+        "times_helpful": observation.times_helpful,
+    }
+
+
+@app.post("/api/observations/{observation_id}/deprecate")
+async def deprecate_observation(observation_id: str, reason: str = ""):
+    """Deprecate an observation (mark as no longer useful)."""
+    from .models import ObservationStatus
+
+    observation = storage.get_observation(observation_id)
+    if not observation:
+        raise HTTPException(status_code=404, detail="Observation not found")
+
+    observation.status = ObservationStatus.DEPRECATED
+    storage.save_observation(observation)
+
+    return {"id": observation.id, "status": "deprecated", "reason": reason}
+
+
+@app.post("/api/observations/prune")
+async def prune_observations(
+    min_evidence: int = 5,
+    max_age_days: int = 180,
+    auto_deprecate: bool = False
+):
+    """
+    Identify stale observations that should be deprecated.
+
+    Args:
+        min_evidence: Minimum evidence count to keep (default: 5)
+        max_age_days: Maximum age in days without sufficient usage (default: 180)
+        auto_deprecate: If True, automatically deprecate stale observations
+    """
+    from .learning import prune_stale_observations
+    from .models import ObservationStatus
+
+    stale_ids = prune_stale_observations(min_evidence, max_age_days)
+
+    if auto_deprecate:
+        for obs_id in stale_ids:
+            observation = storage.get_observation(obs_id)
+            if observation:
+                observation.status = ObservationStatus.DEPRECATED
+                storage.save_observation(observation)
+
+    return {
+        "stale_observation_count": len(stale_ids),
+        "stale_observation_ids": stale_ids,
+        "auto_deprecated": auto_deprecate,
+    }
+
+
 # ============ Teams ============
 
 @app.get("/api/teams/{team_id}")
@@ -643,7 +717,16 @@ async def send_message_stream(conversation_id: str, request: MessageRequest):
             evaluations = await eval_app(application, team_context=team_context)
 
             eval_summary = [
-                {"agent": e.agent_name, "score": e.score, "recommendation": e.recommendation.value}
+                {
+                    "agent": e.agent_name,
+                    "score": e.score,
+                    "recommendation": e.recommendation.value,
+                    "confidence": e.confidence,
+                    "rationale": e.rationale,
+                    "strengths": e.strengths,
+                    "concerns": e.concerns,
+                    "questions": e.questions
+                }
                 for e in evaluations
             ]
             yield f"data: {json.dumps({'type': 'stage', 'stage': 'initial_evaluation', 'status': 'complete', 'evaluations': eval_summary})}\n\n"
@@ -713,7 +796,7 @@ async def send_message_stream(conversation_id: str, request: MessageRequest):
             storage.add_message_to_conversation(conversation_id, "assistant", result_message)
 
             # Final result
-            yield f"data: {json.dumps({'type': 'complete', 'decision_id': decision.id, 'recommendation': recommendation.value, 'average_score': aggregated['average_score'], 'synthesis': synthesis, 'feedback': feedback})}\n\n"
+            yield f"data: {json.dumps({'type': 'complete', 'decision_id': decision.id, 'application_id': application.id, 'recommendation': recommendation.value, 'average_score': aggregated['average_score'], 'synthesis': synthesis, 'feedback': feedback})}\n\n"
 
         except Exception as e:
             import traceback

@@ -40,28 +40,225 @@ function ApplicationCard({ application }) {
   );
 }
 
-// Individual evaluation card
+// Individual evaluation card with full reasoning
 function EvaluationCard({ evaluation }) {
+  const [expanded, setExpanded] = useState(true);
+
   return (
-    <div className="evaluation-card">
-      <div className="evaluation-header">
+    <div className="evaluation-card expanded">
+      <div className="evaluation-header clickable" onClick={() => setExpanded(!expanded)}>
         <span className="agent-name">{evaluation.agent}</span>
         <div className="evaluation-metrics">
           <span className="score">{formatScore(evaluation.score)}</span>
+          {evaluation.confidence !== undefined && (
+            <span className="confidence">({formatScore(evaluation.confidence)} conf)</span>
+          )}
           <span
             className="recommendation-badge"
             style={{ backgroundColor: getRecommendationColor(evaluation.recommendation) }}
           >
             {evaluation.recommendation.replace('_', ' ')}
           </span>
+          <span className="expand-toggle">{expanded ? '−' : '+'}</span>
         </div>
       </div>
+
+      {expanded && (
+        <div className="evaluation-details">
+          {evaluation.rationale && (
+            <div className="evaluation-rationale">
+              <p>{evaluation.rationale}</p>
+            </div>
+          )}
+
+          {evaluation.strengths && evaluation.strengths.length > 0 && (
+            <div className="evaluation-list strengths">
+              <h5>Strengths</h5>
+              <ul>
+                {evaluation.strengths.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {evaluation.concerns && evaluation.concerns.length > 0 && (
+            <div className="evaluation-list concerns">
+              <h5>Concerns</h5>
+              <ul>
+                {evaluation.concerns.map((c, i) => (
+                  <li key={i}>{c}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {evaluation.questions && evaluation.questions.length > 0 && (
+            <div className="evaluation-list questions">
+              <h5>Questions</h5>
+              <ul>
+                {evaluation.questions.map((q, i) => (
+                  <li key={i}>{q}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Human decision component
+function HumanDecisionPanel({ decisionId, humanDecision, onSubmitDecision, isSubmitting }) {
+  const [rationale, setRationale] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [selectedDecision, setSelectedDecision] = useState(null);
+
+  if (humanDecision) {
+    return (
+      <div className="human-decision-result">
+        <div className="human-decision-header">
+          <span className="human-decision-label">Human Decision:</span>
+          <span
+            className="recommendation-badge large"
+            style={{ backgroundColor: getRecommendationColor(humanDecision.decision) }}
+          >
+            {humanDecision.decision.toUpperCase()}
+          </span>
+        </div>
+        {humanDecision.rationale && (
+          <p className="human-rationale">{humanDecision.rationale}</p>
+        )}
+      </div>
+    );
+  }
+
+  if (!showForm) {
+    return (
+      <div className="human-decision-buttons">
+        <span className="decision-prompt">Make your decision:</span>
+        <button
+          className="decision-btn approve"
+          onClick={() => { setSelectedDecision('approve'); setShowForm(true); }}
+          disabled={isSubmitting}
+        >
+          Approve
+        </button>
+        <button
+          className="decision-btn reject"
+          onClick={() => { setSelectedDecision('reject'); setShowForm(true); }}
+          disabled={isSubmitting}
+        >
+          Reject
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="human-decision-form">
+      <div className="form-header">
+        <span>
+          {selectedDecision === 'approve' ? 'Approving' : 'Rejecting'} this application
+        </span>
+        <button className="cancel-btn" onClick={() => setShowForm(false)}>Cancel</button>
+      </div>
+      <textarea
+        className="rationale-input"
+        placeholder="Enter your rationale for this decision..."
+        value={rationale}
+        onChange={(e) => setRationale(e.target.value)}
+        rows={3}
+      />
+      <button
+        className={`submit-decision-btn ${selectedDecision}`}
+        onClick={() => onSubmitDecision(decisionId, selectedDecision, rationale)}
+        disabled={!rationale.trim() || isSubmitting}
+      >
+        {isSubmitting ? 'Submitting...' : `Confirm ${selectedDecision === 'approve' ? 'Approval' : 'Rejection'}`}
+      </button>
+    </div>
+  );
+}
+
+// Outcome recording component (for approved grants)
+function OutcomeRecordingPanel({ applicationId, outcome, onRecordOutcome, isRecording }) {
+  const [notes, setNotes] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [selectedOutcome, setSelectedOutcome] = useState(null);
+
+  if (outcome) {
+    return (
+      <div className={`outcome-result ${outcome.outcome}`}>
+        <div className="outcome-header">
+          <span className="outcome-label">Grant Outcome:</span>
+          <span className={`outcome-badge ${outcome.outcome}`}>
+            {outcome.outcome.toUpperCase()}
+          </span>
+        </div>
+        {outcome.notes && (
+          <p className="outcome-notes">{outcome.notes}</p>
+        )}
+      </div>
+    );
+  }
+
+  if (!showForm) {
+    return (
+      <div className="outcome-buttons">
+        <span className="outcome-prompt">Record grant outcome:</span>
+        <button
+          className="outcome-btn success"
+          onClick={() => { setSelectedOutcome('success'); setShowForm(true); }}
+          disabled={isRecording}
+        >
+          Success
+        </button>
+        <button
+          className="outcome-btn failure"
+          onClick={() => { setSelectedOutcome('failure'); setShowForm(true); }}
+          disabled={isRecording}
+        >
+          Failure
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="outcome-form">
+      <div className="form-header">
+        <span>
+          Recording as {selectedOutcome === 'success' ? 'Successful' : 'Failed'}
+        </span>
+        <button className="cancel-btn" onClick={() => setShowForm(false)}>Cancel</button>
+      </div>
+      <textarea
+        className="outcome-notes-input"
+        placeholder={selectedOutcome === 'success'
+          ? "Describe what made this grant successful (deliverables, impact, etc.)..."
+          : "Explain why this grant failed (missed milestones, team issues, etc.)..."}
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        rows={3}
+      />
+      <button
+        className={`submit-outcome-btn ${selectedOutcome}`}
+        onClick={() => onRecordOutcome(applicationId, selectedOutcome, notes)}
+        disabled={notes.trim().length < 10 || isRecording}
+      >
+        {isRecording ? 'Recording...' : `Confirm ${selectedOutcome === 'success' ? 'Success' : 'Failure'}`}
+      </button>
+      {notes.trim().length > 0 && notes.trim().length < 10 && (
+        <span className="char-hint">Please enter at least 10 characters</span>
+      )}
     </div>
   );
 }
 
 // Final decision component
-function DecisionCard({ recommendation, averageScore, synthesis, feedback }) {
+function DecisionCard({ recommendation, averageScore, synthesis, feedback, decisionId, applicationId, humanDecision, outcome, onSubmitDecision, onRecordOutcome, isSubmitting, isRecording }) {
   return (
     <div className="decision-card">
       <div className="decision-header">
@@ -94,6 +291,34 @@ function DecisionCard({ recommendation, averageScore, synthesis, feedback }) {
           </div>
         </div>
       )}
+
+      {decisionId && (
+        <div className="decision-section">
+          <h4>Your Decision</h4>
+          <HumanDecisionPanel
+            decisionId={decisionId}
+            humanDecision={humanDecision}
+            onSubmitDecision={onSubmitDecision}
+            isSubmitting={isSubmitting}
+          />
+        </div>
+      )}
+
+      {/* Show outcome recording only if human approved the grant */}
+      {humanDecision?.decision === 'approve' && applicationId && (
+        <div className="decision-section">
+          <h4>Grant Outcome</h4>
+          <p className="outcome-description">
+            Once this grant has completed, record the outcome to help the council learn from results.
+          </p>
+          <OutcomeRecordingPanel
+            applicationId={applicationId}
+            outcome={outcome}
+            onRecordOutcome={onRecordOutcome}
+            isRecording={isRecording}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -101,7 +326,11 @@ function DecisionCard({ recommendation, averageScore, synthesis, feedback }) {
 export default function ChatInterface({
   conversation,
   onSendMessage,
+  onSubmitDecision,
+  onRecordOutcome,
   isLoading,
+  isSubmittingDecision,
+  isRecordingOutcome,
 }) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
@@ -236,6 +465,14 @@ export default function ChatInterface({
                       averageScore={msg.averageScore}
                       synthesis={msg.synthesis}
                       feedback={msg.feedback}
+                      decisionId={msg.decisionId}
+                      applicationId={msg.applicationId}
+                      humanDecision={msg.humanDecision}
+                      outcome={msg.outcome}
+                      onSubmitDecision={onSubmitDecision}
+                      onRecordOutcome={onRecordOutcome}
+                      isSubmitting={isSubmittingDecision}
+                      isRecording={isRecordingOutcome}
                     />
                   )}
                 </div>

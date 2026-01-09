@@ -9,6 +9,8 @@ function App() {
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubmittingDecision, setIsSubmittingDecision] = useState(false);
+  const [isRecordingOutcome, setIsRecordingOutcome] = useState(false);
 
   // Load conversations on mount
   useEffect(() => {
@@ -124,6 +126,7 @@ function App() {
               lastMsg.feedback = event.feedback;
               lastMsg.averageScore = event.average_score;
               lastMsg.decisionId = event.decision_id;
+              lastMsg.applicationId = event.application_id;
               lastMsg.loading = {
                 parsing: false,
                 evaluation: false,
@@ -166,6 +169,58 @@ function App() {
         messages: prev.messages.slice(0, -2),
       }));
       setIsLoading(false);
+    }
+  };
+
+  const handleSubmitDecision = async (decisionId, decision, rationale) => {
+    setIsSubmittingDecision(true);
+    try {
+      await api.submitHumanDecision(decisionId, decision, rationale);
+
+      // Update the message with the human decision
+      setCurrentConversation((prev) => {
+        const messages = [...prev.messages];
+        const lastMsg = { ...messages[messages.length - 1] };
+        lastMsg.humanDecision = { decision, rationale };
+        messages[messages.length - 1] = lastMsg;
+        return { ...prev, messages };
+      });
+
+      // Reload conversations to update sidebar
+      loadConversations();
+    } catch (error) {
+      console.error('Failed to submit human decision:', error);
+      alert('Failed to submit decision. Please try again.');
+    } finally {
+      setIsSubmittingDecision(false);
+    }
+  };
+
+  const handleRecordOutcome = async (applicationId, outcome, notes) => {
+    setIsRecordingOutcome(true);
+    try {
+      await api.recordOutcome(applicationId, outcome, notes);
+
+      // Update the message with the outcome
+      setCurrentConversation((prev) => {
+        const messages = [...prev.messages];
+        // Find the message with this applicationId
+        const msgIndex = messages.findIndex(m => m.applicationId === applicationId);
+        if (msgIndex >= 0) {
+          const updatedMsg = { ...messages[msgIndex] };
+          updatedMsg.outcome = { outcome, notes };
+          messages[msgIndex] = updatedMsg;
+        }
+        return { ...prev, messages };
+      });
+
+      // Reload conversations to update sidebar
+      loadConversations();
+    } catch (error) {
+      console.error('Failed to record outcome:', error);
+      alert('Failed to record outcome. Please try again.');
+    } finally {
+      setIsRecordingOutcome(false);
     }
   };
 
@@ -238,7 +293,11 @@ function App() {
       <ChatInterface
         conversation={currentConversation}
         onSendMessage={handleSendMessage}
+        onSubmitDecision={handleSubmitDecision}
+        onRecordOutcome={handleRecordOutcome}
         isLoading={isLoading}
+        isSubmittingDecision={isSubmittingDecision}
+        isRecordingOutcome={isRecordingOutcome}
       />
     </div>
   );

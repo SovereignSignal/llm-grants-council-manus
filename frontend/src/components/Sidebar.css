@@ -76,3 +76,147 @@
   color: #999;
   font-size: 12px;
 }
+
+/* Observations Section */
+.observations-section {
+  border-top: 1px solid #e0e0e0;
+  padding: 8px;
+}
+
+.observations-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f0f0f0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.observations-header:hover {
+  background: #e8e8e8;
+}
+
+.draft-badge {
+  background: #f59e0b;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.observations-list {
+  margin-top: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.observations-summary {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.refresh-btn {
+  margin-left: auto;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.refresh-btn:hover {
+  background: #f3f4f6;
+}
+
+.observations-subheader {
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.observation-item {
+  padding: 10px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.observation-item.draft {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+}
+
+.observation-item.active {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+}
+
+.observation-agent {
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 4px;
+  text-transform: capitalize;
+}
+
+.observation-pattern {
+  color: #4b5563;
+  line-height: 1.4;
+  margin-bottom: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.observation-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.observation-tags .tag {
+  background: #e5e7eb;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: #4b5563;
+}
+
+.observation-meta {
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+.activate-btn {
+  padding: 4px 10px;
+  background: #22c55e;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.activate-btn:hover:not(:disabled) {
+  background: #16a34a;
+}
+
+.activate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

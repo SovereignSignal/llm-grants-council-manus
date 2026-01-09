@@ -275,7 +275,14 @@ async def evaluate_application(
                     content = content[4:]
             
             data = json.loads(content.strip())
-            
+
+            # Debug: print the parsed data
+            print(f"[DEBUG] Agent {agent_id} evaluation data:")
+            print(f"  - rationale: {str(data.get('rationale', 'MISSING'))[:100]}...")
+            print(f"  - strengths: {data.get('strengths', 'MISSING')}")
+            print(f"  - concerns: {data.get('concerns', 'MISSING')}")
+            print(f"  - questions: {data.get('questions', 'MISSING')}")
+
             # Find observations used
             obs_used = []
             for item in models_with_messages:

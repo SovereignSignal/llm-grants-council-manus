@@ -247,6 +247,15 @@ function App() {
         } else if (status === 'complete') {
           lastMsg.loading = { ...lastMsg.loading, evaluation: false };
           lastMsg.evaluations = event.evaluations;
+          // Debug: log the evaluation data
+          console.log('[DEBUG] Received evaluations:', event.evaluations);
+          if (event.evaluations && event.evaluations[0]) {
+            console.log('[DEBUG] First evaluation details:', {
+              rationale: event.evaluations[0].rationale,
+              strengths: event.evaluations[0].strengths,
+              concerns: event.evaluations[0].concerns
+            });
+          }
           lastMsg.status = null;
         }
       } else if (stage.startsWith('deliberation_round_')) {

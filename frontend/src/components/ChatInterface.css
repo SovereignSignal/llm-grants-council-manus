@@ -774,3 +774,187 @@
   color: #4b5563;
   line-height: 1.5;
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .chat-interface {
+    width: 100%;
+  }
+
+  .messages-container {
+    padding: 16px;
+    padding-top: 60px; /* Space for mobile menu button */
+  }
+
+  .empty-state {
+    padding: 20px;
+  }
+
+  .empty-state h2 {
+    font-size: 20px;
+  }
+
+  .empty-state p {
+    font-size: 14px;
+  }
+
+  .message-group {
+    margin-bottom: 24px;
+  }
+
+  .user-message .message-content {
+    max-width: 100%;
+    padding: 12px;
+  }
+
+  /* Input form stacked on mobile */
+  .input-form {
+    flex-direction: column;
+    padding: 12px 16px;
+    gap: 10px;
+  }
+
+  .message-input {
+    width: 100%;
+    min-height: 60px;
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: 12px;
+  }
+
+  .send-button {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+  }
+
+  /* Application card */
+  .application-card {
+    padding: 14px 16px;
+  }
+
+  .application-card h3 {
+    font-size: 16px;
+  }
+
+  .application-meta {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Evaluations */
+  .evaluation-card {
+    padding: 12px;
+  }
+
+  .evaluation-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .evaluation-metrics {
+    flex-wrap: wrap;
+  }
+
+  .agent-name {
+    font-size: 14px;
+  }
+
+  /* Decision card */
+  .decision-card {
+    padding: 16px;
+  }
+
+  .decision-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .decision-header h3 {
+    font-size: 16px;
+  }
+
+  /* Human decision buttons */
+  .human-decision-buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .decision-prompt {
+    margin-bottom: 4px;
+  }
+
+  .decision-btn {
+    width: 100%;
+    padding: 14px;
+  }
+
+  .human-decision-form {
+    padding: 12px;
+  }
+
+  .submit-decision-btn {
+    width: 100%;
+    padding: 14px;
+  }
+
+  /* Outcome buttons */
+  .outcome-buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .outcome-prompt {
+    margin-bottom: 4px;
+  }
+
+  .outcome-btn {
+    width: 100%;
+    padding: 14px;
+  }
+
+  .outcome-form {
+    padding: 12px;
+  }
+
+  .submit-outcome-btn {
+    width: 100%;
+    padding: 14px;
+  }
+
+  /* Status messages */
+  .stage-loading {
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  .status-message {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 400px) {
+  .messages-container {
+    padding: 12px;
+    padding-top: 56px;
+  }
+
+  .input-form {
+    padding: 10px 12px;
+  }
+
+  .evaluation-metrics {
+    gap: 6px;
+  }
+
+  .score {
+    font-size: 14px;
+  }
+
+  .recommendation-badge {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+}

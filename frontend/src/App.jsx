@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
+import { ToastProvider, useToast } from './components/Toast';
 import { api } from './api';
 import './App.css';
 
-function App() {
+function AppContent() {
+  const toast = useToast();
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
@@ -188,9 +190,10 @@ function App() {
 
       // Reload conversations to update sidebar
       loadConversations();
+      toast.success(`Application ${decision === 'approve' ? 'approved' : 'rejected'} successfully`);
     } catch (error) {
       console.error('Failed to submit human decision:', error);
-      alert('Failed to submit decision. Please try again.');
+      toast.error('Failed to submit decision. Please try again.');
     } finally {
       setIsSubmittingDecision(false);
     }
@@ -216,9 +219,10 @@ function App() {
 
       // Reload conversations to update sidebar
       loadConversations();
+      toast.success(`Grant outcome recorded as ${outcome}`);
     } catch (error) {
       console.error('Failed to record outcome:', error);
-      alert('Failed to record outcome. Please try again.');
+      toast.error('Failed to record outcome. Please try again.');
     } finally {
       setIsRecordingOutcome(false);
     }
@@ -309,6 +313,14 @@ function App() {
         isRecordingOutcome={isRecordingOutcome}
       />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
   );
 }
 

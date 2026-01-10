@@ -11,6 +11,7 @@ export default function Sidebar({
   const [observations, setObservations] = useState([]);
   const [showObservations, setShowObservations] = useState(false);
   const [activatingId, setActivatingId] = useState(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     loadObservations();
@@ -40,14 +41,40 @@ export default function Sidebar({
   const draftCount = observations.filter((o) => o.status === 'draft').length;
   const activeCount = observations.filter((o) => o.status === 'active').length;
 
+  const handleConversationSelect = (id) => {
+    onSelectConversation(id);
+    setMobileOpen(false); // Close sidebar on mobile after selection
+  };
+
+  const handleNewConversation = () => {
+    onNewConversation();
+    setMobileOpen(false); // Close sidebar on mobile after creating
+  };
+
   return (
-    <div className="sidebar">
-      <div className="sidebar-header">
-        <h1>Grants Council</h1>
-        <button className="new-conversation-btn" onClick={onNewConversation}>
-          + New Conversation
-        </button>
-      </div>
+    <>
+      {/* Mobile menu button */}
+      <button
+        className="mobile-menu-btn"
+        onClick={() => setMobileOpen(!mobileOpen)}
+        aria-label="Toggle menu"
+      >
+        {mobileOpen ? '✕' : '☰'}
+      </button>
+
+      {/* Mobile overlay */}
+      <div
+        className={`sidebar-overlay ${mobileOpen ? 'visible' : ''}`}
+        onClick={() => setMobileOpen(false)}
+      />
+
+      <div className={`sidebar ${mobileOpen ? 'open' : ''}`}>
+        <div className="sidebar-header">
+          <h1>Grants Council</h1>
+          <button className="new-conversation-btn" onClick={handleNewConversation}>
+            + New Evaluation
+          </button>
+        </div>
 
       <div className="conversation-list">
         {conversations.length === 0 ? (
@@ -59,7 +86,7 @@ export default function Sidebar({
               className={`conversation-item ${
                 conv.id === currentConversationId ? 'active' : ''
               }`}
-              onClick={() => onSelectConversation(conv.id)}
+              onClick={() => handleConversationSelect(conv.id)}
             >
               <div className="conversation-title">
                 {conv.title || 'New Evaluation'}
@@ -143,5 +170,6 @@ export default function Sidebar({
         )}
       </div>
     </div>
+    </>
   );
 }

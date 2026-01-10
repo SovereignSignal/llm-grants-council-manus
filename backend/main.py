@@ -23,6 +23,7 @@ from .parser import parse_freeform_application, parse_structured_application
 from .council import (
     run_full_council, record_human_decision, generate_evaluation_title
 )
+from .database import init_db
 
 app = FastAPI(
     title="Grants Council API",
@@ -38,6 +39,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Initialize database and storage on startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize storage and database on startup."""
+    storage.init_storage()  # Ensure JSON directories exist
+    init_db()  # Initialize SQLAlchemy tables
 
 
 # ============ Request/Response Models ============
@@ -108,10 +117,24 @@ class DecisionResponse(BaseModel):
 @app.get("/")
 async def root():
     """Health check endpoint."""
+    from .database import is_postgres, DATABASE_URL
+
     return {
         "status": "ok",
         "service": "Grants Council API",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "database": "postgresql" if is_postgres() else "sqlite",
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """Detailed health check endpoint."""
+    from .database import is_postgres
+
+    return {
+        "status": "healthy",
+        "database": "postgresql" if is_postgres() else "sqlite",
     }
 
 

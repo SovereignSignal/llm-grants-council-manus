@@ -13,3 +13,10 @@
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
 }
+
+/* Mobile: Chat interface takes full width since sidebar is overlay */
+@media (max-width: 768px) {
+  .app {
+    flex-direction: column;
+  }
+}
